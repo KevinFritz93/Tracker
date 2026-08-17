@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aktivitäten-Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #EEEBE1;
+    --paper-2: #F7F5EE;
+    --ink: #2E2B24;
+    --ink-soft: #6B6656;
+    --moss: #5F6E4E;
+    --moss-dark: #46523A;
+    --ochre: #B9822E;
+    --line: #DAD5C4;
+    --card: #FFFFFF;
+    --bad: #B5654B;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter', sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 80px;}
+  header{margin-bottom:28px;}
+  h1{font-family:'Fraunces', serif;font-weight:600;font-size:clamp(28px,5vw,40px);margin:0 0 6px;letter-spacing:-0.01em;}
+  .sub{color:var(--ink-soft);font-size:15px;max-width:60ch;line-height:1.5;}
+  .warn{background:#FBF3E3;border:1px solid #E7D5A8;color:#7A5B1E;font-size:12.5px;border-radius:8px;padding:9px 12px;margin-bottom:18px;line-height:1.5;}
+
+  nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:24px;flex-wrap:wrap;}
+  nav button{font-family:'Inter',sans-serif;background:none;border:none;padding:10px 16px;font-size:14px;font-weight:500;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;}
+  nav button.active{color:var(--moss-dark);border-bottom-color:var(--moss);}
+  nav button:hover{color:var(--ink);}
+
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:16px;}
+  .card h2{font-family:'Fraunces',serif;font-weight:500;font-size:19px;margin:0 0 8px;}
+  .hint{color:var(--ink-soft);font-size:13px;margin:0;line-height:1.5;}
+  .card-head{margin-bottom:20px;}
+  .card-head.row{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:12px;margin-bottom:12px;}
+  .card-head.row h2{margin:0;}
+
+  .card-form{display:flex;flex-direction:column;gap:16px;}
+  .card-form > .btn{margin-top:0;}
+  .field-group{display:flex;flex-direction:column;gap:6px;}
+  .field-group label{margin:0;}
+
+  label{display:block;font-size:13px;font-weight:500;color:var(--ink-soft);margin-bottom:5px;margin-top:14px;}
+  label:first-of-type{margin-top:0;}
+  input[type=text], input[type=date], textarea, select{width:100%;font-family:'Inter',sans-serif;font-size:14px;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:var(--paper-2);color:var(--ink);}
+  textarea{resize:vertical;min-height:70px;line-height:1.5;}
+  input:focus, textarea:focus, select:focus, button:focus-visible{outline:2px solid var(--moss);outline-offset:1px;}
+
+  .mood-wrap{display:flex;align-items:center;gap:12px;margin-top:6px;}
+  input[type=range]{flex:1;accent-color:var(--moss);}
+  .mood-readout{font-family:'Fraunces',serif;font-weight:600;font-size:20px;color:var(--moss-dark);width:32px;text-align:center;}
+
+  .btn{font-family:'Inter',sans-serif;background:var(--moss);color:#fff;border:none;padding:10px 18px;border-radius:7px;font-size:14px;font-weight:500;cursor:pointer;margin-top:16px;}
+  .btn:hover{background:var(--moss-dark);}
+  .btn.secondary{background:none;border:1px solid var(--line);color:var(--ink-soft);}
+  .btn.secondary:hover{color:var(--ink);border-color:var(--ink-soft);}
+  .btn.small{padding:5px 10px;font-size:12px;margin-top:0;}
+  .btn.danger{background:none;color:var(--bad);}
+  .btn.danger:hover{background:#FBEEEA;}
+
+  .day-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+  .day-head .d{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--moss-dark);}
+  .day-head .stats{font-size:12px;color:var(--ink-soft);}
+  .activity{display:flex;align-items:flex-start;gap:10px;padding:8px 0;}
+  .activity .num{font-family:'Fraunces',serif;font-weight:600;color:var(--ochre);width:22px;text-align:center;flex-shrink:0;margin-top:1px;}
+  .activity .body{flex:1;min-width:0;}
+  .activity .txt{font-size:14px;}
+  .activity .meta{font-size:12px;color:var(--moss-dark);font-weight:500;margin-bottom:2px;}
+  .activity .desc{font-size:13px;color:var(--ink-soft);margin-top:3px;line-height:1.45;}
+  .activity .reason{font-size:12.5px;color:var(--ink-soft);margin-top:3px;line-height:1.45;font-style:italic;}
+  .activity-actions{display:flex;gap:2px;flex-shrink:0;margin-top:1px;}
+  .activity-actions button{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:14px;padding:2px 5px;border-radius:4px;}
+  .activity-actions button:hover{background:var(--paper-2);}
+  .activity-actions button.edit:hover{color:var(--moss-dark);}
+  .activity-actions button.delete:hover{color:var(--bad);}
+  .activity-edit{width:100%;padding:14px 16px;background:var(--paper-2);border:1px solid var(--line);border-radius:8px;margin:4px 0;display:flex;flex-direction:column;gap:16px;}
+  .activity-edit .field-group label{font-size:12px;}
+  .activity-edit .mood-wrap{margin-top:0;}
+  .activity-edit textarea{min-height:56px;}
+  .activity-edit-actions{display:flex;gap:8px;margin-top:0;}
+  .activity-edit-actions .btn{margin-top:0;}
+
+  .datetime-row{display:flex;gap:12px;flex-wrap:wrap;}
+  .datetime-row .field-group{flex:1;min-width:140px;}
+
+  .optional{font-weight:400;color:var(--ink-soft);font-size:11px;}
+  .clock-picker{position:relative;display:flex;gap:6px;align-items:center;}
+  .clock-picker .clock-input{flex:1;min-width:0;font-variant-numeric:tabular-nums;}
+  .clock-toggle{flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--paper-2);border:1px solid var(--line);border-radius:7px;color:var(--ink-soft);line-height:1;padding:8px 9px;cursor:pointer;}
+  .clock-toggle:hover{border-color:var(--moss);color:var(--moss-dark);}
+  .clock-toggle.active{border-color:var(--moss);color:var(--moss-dark);background:#EEF2E8;}
+
+  .clock-popover{position:absolute;top:calc(100% + 6px);right:0;z-index:20;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(46,43,36,.14);padding:10px;display:none;flex-direction:column;align-items:center;gap:8px;}
+  .clock-popover.open{display:flex;}
+  .clock-mode{display:flex;gap:3px;background:var(--paper-2);border:1px solid var(--line);border-radius:999px;padding:2px;}
+  .clock-mode button{font-family:'Inter',sans-serif;background:none;border:none;padding:4px 12px;font-size:11px;font-weight:500;color:var(--ink-soft);border-radius:999px;cursor:pointer;}
+  .clock-mode button.active{background:var(--moss);color:#fff;}
+  .clock-dial{position:relative;width:150px;height:150px;border-radius:50%;background:var(--paper-2);border:1px solid var(--line);}
+  .clock-dial::after{content:'';position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;background:var(--moss);border-radius:50%;z-index:2;}
+  .clock-hand{position:absolute;left:50%;top:50%;width:2px;background:var(--moss);transform-origin:bottom center;border-radius:2px;z-index:1;pointer-events:none;}
+  .clock-hand.hour{height:38px;margin-left:-1px;margin-top:-38px;opacity:0.55;}
+  .clock-hand.minute{height:54px;margin-left:-1px;margin-top:-54px;background:var(--ochre);}
+  .clock-num{position:absolute;transform:translate(-50%,-50%);min-width:22px;min-height:22px;padding:1px;border:none;background:none;cursor:pointer;border-radius:50%;font-family:'Inter',sans-serif;line-height:1;z-index:3;}
+  .clock-num .h12{display:block;font-size:11px;font-weight:600;color:var(--ink);}
+  .clock-num .h24{display:block;font-size:8px;color:var(--ink-soft);margin-top:1px;}
+  .clock-num:hover{background:#EEF2E8;}
+  .clock-num.selected{background:var(--moss);}
+  .clock-num.selected .h12,.clock-num.selected .h24{color:#fff;}
+  .clock-num.minute-only{font-size:11px;font-weight:600;color:var(--ink);}
+  .clock-num.minute-only.selected{background:var(--ochre);color:#fff;}
+  .clock-footer{display:flex;gap:6px;align-items:center;width:100%;}
+  .clock-footer .btn{margin-top:0;flex:1;}
+  .btn.ghost{background:none;border:none;color:var(--moss);padding:6px 8px;font-size:12px;margin-top:0;white-space:nowrap;}
+  .btn.ghost:hover{background:var(--paper-2);}
+
+  .day-review-row{display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;font-family:inherit;background:var(--paper-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;}
+  .day-review-row:hover{border-color:var(--moss);}
+  .day-review-row .score{font-family:'Fraunces',serif;font-weight:600;font-size:19px;color:var(--moss-dark);min-width:26px;text-align:center;}
+  .day-review-row .content{flex:1;min-width:0;}
+  .day-review-row .d{display:block;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--moss-dark);}
+  .day-review-row .note{display:block;font-size:13px;color:var(--ink-soft);margin-top:3px;line-height:1.45;white-space:pre-wrap;}
+
+  .spark-wrap{background:var(--paper-2);border:1px solid var(--line);border-radius:8px;padding:12px 14px 8px;margin:6px 0 4px;}
+  .spark{display:block;width:100%;height:140px;}
+  .spark-stats{display:flex;flex-wrap:wrap;gap:12px 20px;font-size:12.5px;color:var(--ink-soft);margin-top:10px;}
+  .spark-stats strong{color:var(--ink);font-weight:600;}
+  .chart-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px;}
+  .chart-controls .field{flex:1;min-width:120px;}
+  .chart-controls label{margin-top:0;font-size:12px;}
+  .chart-controls select{font-size:13px;padding:7px 9px;}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .toolbar input[type=file]{display:none;}
+
+  .day-group{border-top:1px solid var(--line);padding:0;}
+  .day-group:first-child{border-top:none;}
+  .day-toggle{width:100%;display:flex;padding:14px 0;background:none;border:none;cursor:pointer;text-align:left;font-family:inherit;color:inherit;}
+  .day-toggle .day-head{width:100%;margin-bottom:0;}
+  .day-toggle:hover .d{color:var(--moss);}
+  .day-toggle .chevron{font-size:11px;color:var(--ink-soft);transition:transform .15s;margin-left:8px;text-transform:none;letter-spacing:0;}
+  .day-group.open .day-toggle .chevron{transform:rotate(90deg);}
+  .day-body{display:none;padding:0 0 14px 4px;}
+  .day-group.open .day-body{display:block;}
+
+  .form-actions{display:flex;gap:8px;flex-wrap:wrap;}
+  .form-actions .btn{margin-top:0;}
+
+  .day-mood-badge{display:inline-block;background:#EEF2E8;color:var(--moss-dark);border:1px solid #D5DDC8;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600;margin-right:8px;}
+  .day-review{background:var(--paper-2);border:1px solid var(--line);border-left:3px solid var(--moss);border-radius:8px;padding:10px 12px;margin:4px 0 12px;}
+  .day-review.is-empty{border-left-color:var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  .day-review-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .day-review-score{font-family:'Fraunces',serif;font-weight:600;font-size:19px;color:var(--moss-dark);}
+  .day-review-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft);flex:1;}
+  .day-review.is-empty .day-review-label{text-transform:none;letter-spacing:0;font-weight:400;font-style:italic;font-size:13px;}
+  .day-review-note{font-size:13.5px;color:var(--ink);margin-top:6px;line-height:1.5;white-space:pre-wrap;}
+
+  .empty{color:var(--ink-soft);font-size:14px;font-style:italic;padding:6px 0;}
+
+  .status{font-size:12px;color:var(--ink-soft);margin-top:8px;min-height:16px;}
+  .status.error{color:var(--bad);}
+  footer{text-align:center;color:var(--ink-soft);font-size:12px;margin-top:30px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Aktivitäten-Tracker</h1>
+    <p class="sub">Ein fortlaufendes Tagebuch für Aktivität und Stimmung – basierend auf dem Prinzip der Verhaltensaktivierung.</p>
+  </header>
+
+  <div class="warn" id="storage-warn" style="display:none">
+    Dein Browser blockiert lokale Speicherung in dieser Ansicht (z. B. Vorschau-Fenster). Öffne die heruntergeladene HTML-Datei direkt in einem Browser-Tab, damit deine Einträge dauerhaft erhalten bleiben.
+  </div>
+
+  <nav>
+    <button data-tab="log" class="active">Tagebuch</button>
+    <button data-tab="day">Tagesgefühl</button>
+  </nav>
+
+  <!-- TAGEBUCH -->
+  <div class="panel active" id="tab-log">
+    <div class="card">
+      <div class="card-head">
+        <h2>Aktivität hinzufügen</h2>
+        <p class="hint">Trag pro Tag beliebig viele Aktivitäten einzeln ein – mit Beschreibung, Stimmung (0–10) und Begründung. Die Uhrzeit kannst du angeben, musst du aber nicht.</p>
+      </div>
+      <div class="card-form">
+        <div class="datetime-row">
+          <div class="field-group">
+            <label for="log-date">Datum</label>
+            <input type="date" id="log-date">
+          </div>
+          <div class="field-group">
+            <label for="log-time">Uhrzeit <span class="optional">(optional)</span></label>
+            <div class="clock-picker" id="log-time-picker">
+              <input type="text" id="log-time" class="clock-input" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off">
+              <button type="button" class="clock-toggle" title="Uhr öffnen" aria-label="Uhr öffnen" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+              </button>
+              <div class="clock-popover">
+                <div class="clock-mode">
+                  <button type="button" class="active" data-mode="hour">Stunde</button>
+                  <button type="button" data-mode="minute">Minute</button>
+                </div>
+                <div class="clock-dial"></div>
+                <div class="clock-footer">
+                  <button type="button" class="btn small secondary clock-now-btn">Jetzt</button>
+                  <button type="button" class="btn small clock-done-btn">Fertig</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="log-activity">Aktivität</label>
+          <input type="text" id="log-activity" placeholder="z. B. Spaziergang, mit Freund telefoniert, Serien geschaut …">
+        </div>
+        <div class="field-group">
+          <label for="log-description">Beschreibung</label>
+          <textarea id="log-description" rows="2" placeholder="z. B. 30 Min. im Park, danach Kaffee getrunken …"></textarea>
+        </div>
+        <div class="field-group">
+          <label for="log-mood">Stimmung dabei: <span class="mood-readout-inline"></span></label>
+          <div class="mood-wrap">
+            <input type="range" id="log-mood" min="0" max="10" step="1" value="5">
+            <span class="mood-readout" id="mood-readout">5</span>
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="log-reason">Warum diese Stimmung?</label>
+          <textarea id="log-reason" rows="2" placeholder="z. B. Ich war draußen und habe mich bewegt – danach fühlte ich mich ruhiger."></textarea>
+        </div>
+        <button class="btn" id="save-entry">Aktivität hinzufügen</button>
+        <div class="status" id="log-status"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Verlauf</h2>
+        <p class="hint" id="chart-hint">Wähle unten, ob du die durchschnittliche Stimmung, die Summe oder die Anzahl der Aktivitäten pro Tag vergleichen möchtest.</p>
+      </div>
+      <div class="chart-controls">
+        <div class="field">
+          <label for="chart-metric">Anzeige</label>
+          <select id="chart-metric">
+            <option value="avg">Ø Stimmung pro Tag</option>
+            <option value="dayMood">Tagesgefühl pro Tag</option>
+            <option value="sum">Summe Stimmung pro Tag</option>
+            <option value="count">Anzahl Aktivitäten pro Tag</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="chart-period">Zeitraum</label>
+          <select id="chart-period">
+            <option value="all">Gesamtverlauf</option>
+            <option value="year">Jahr</option>
+            <option value="month">Monat</option>
+            <option value="week">Woche</option>
+          </select>
+        </div>
+        <div class="field" id="chart-year-wrap" style="display:none">
+          <label for="chart-year">Jahr</label>
+          <select id="chart-year"></select>
+        </div>
+        <div class="field" id="chart-month-wrap" style="display:none">
+          <label for="chart-month">Monat</label>
+          <select id="chart-month"></select>
+        </div>
+        <div class="field" id="chart-week-wrap" style="display:none">
+          <label for="chart-week">Woche</label>
+          <select id="chart-week"></select>
+        </div>
+      </div>
+      <div class="spark-wrap">
+        <svg class="spark" id="spark" viewBox="0 0 600 140" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="spark-stats" id="spark-stats"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head row">
+        <h2>Tage im Überblick</h2>
+        <div class="toolbar">
+          <button class="btn small secondary" id="export-csv">Als CSV exportieren</button>
+          <button class="btn small secondary" id="import-csv-btn">CSV hochladen</button>
+          <input type="file" id="import-csv" accept=".csv,text/csv">
+        </div>
+      </div>
+      <p class="hint" style="margin-bottom:16px;">Klicke auf einen Tag, um alle Aktivitäten anzuzeigen. Mit ✎ bearbeiten oder × löschen.</p>
+      <div id="entries-list"></div>
+      <div class="status" id="import-status"></div>
+    </div>
+  </div>
+
+  <!-- TAGESGEFÜHL -->
+  <div class="panel" id="tab-day">
+    <div class="card">
+      <div class="card-head">
+        <h2>Tagesgefühl</h2>
+        <p class="hint">Wie hat sich der Tag als Ganzes angefühlt? Das ist unabhängig von den einzelnen Aktivitäten – auch für Tage, an denen du nichts eingetragen hast.</p>
+      </div>
+      <div class="card-form">
+        <div class="field-group">
+          <label for="day-date">Datum</label>
+          <input type="date" id="day-date">
+        </div>
+        <div class="field-group">
+          <label for="day-mood">Gefühl an diesem Tag (0 = sehr schlecht, 10 = sehr gut)</label>
+          <div class="mood-wrap">
+            <input type="range" id="day-mood" min="0" max="10" step="1" value="5">
+            <span class="mood-readout" id="day-mood-readout">5</span>
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="day-note">Was hat den Tag geprägt? <span class="optional">(optional)</span></label>
+          <textarea id="day-note" rows="3" placeholder="z. B. Viel Druck bei der Arbeit, abends aber ein gutes Gespräch – insgesamt ein ruhiger Tag."></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn" id="save-day">Tagesgefühl speichern</button>
+          <button class="btn secondary" id="delete-day" style="display:none">Für diesen Tag löschen</button>
+        </div>
+        <div class="status" id="day-status"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Zuletzt festgehalten</h2>
+        <p class="hint">Deine letzten Tagesgefühle. Klicke auf einen Tag, um ihn oben zu bearbeiten.</p>
+      </div>
+      <div id="day-review-list"></div>
+    </div>
+  </div>
+
+  <footer>Deine Einträge werden lokal in diesem Browser gespeichert, solange du dieselbe Datei am selben Ort öffnest.</footer>
+</div>
+
+<script>
+const DAYS = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function nowTime(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function fmtTime(time){
+  if(!time) return '';
+  return time.slice(0,5);
+}
+function parseTimeValue(time){
+  const parts = (time || '00:00').split(':');
+  return { h: parseInt(parts[0], 10) || 0, m: parseInt(parts[1], 10) || 0 };
+}
+function formatTimeValue(h, m){
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+
+// Accepts loose input like "9", "930", "7:5", "21.30" and returns "HH:MM" or '' if unusable.
+function normalizeTimeInput(raw){
+  const str = String(raw || '').trim();
+  if(!str) return '';
+  let h, m;
+  const separated = str.match(/^(\d{1,2})\D(\d{1,2})$/);
+  if(separated){
+    h = parseInt(separated[1], 10);
+    m = parseInt(separated[2], 10);
+  } else {
+    const digits = str.replace(/\D/g, '');
+    if(!digits) return '';
+    if(digits.length <= 2){
+      h = parseInt(digits, 10);
+      m = 0;
+    } else if(digits.length === 3){
+      h = parseInt(digits.slice(0,1), 10);
+      m = parseInt(digits.slice(1), 10);
+    } else {
+      h = parseInt(digits.slice(0,2), 10);
+      m = parseInt(digits.slice(2,4), 10);
+    }
+  }
+  if(isNaN(h) || isNaN(m) || h > 23 || m > 59) return '';
+  return formatTimeValue(h, m);
+}
+
+function initClockPicker(picker, initialValue){
+  if(picker.dataset.initialized) return picker;
+  picker.dataset.initialized = '1';
+
+  const input = picker.querySelector('.clock-input');
+  const toggle = picker.querySelector('.clock-toggle');
+  const popover = picker.querySelector('.clock-popover');
+  const dial = picker.querySelector('.clock-dial');
+  const modeBtns = picker.querySelectorAll('.clock-mode button');
+  const nowBtn = picker.querySelector('.clock-now-btn');
+  const doneBtn = picker.querySelector('.clock-done-btn');
+  let mode = 'hour';
+
+  function currentParts(){ return parseTimeValue(normalizeTimeInput(input.value) || nowTime()); }
+
+  function setTime(timeStr){
+    input.value = timeStr ? fmtTime(timeStr) : '';
+    renderDial();
+  }
+
+  function commit(h, m){
+    input.value = formatTimeValue(h, m);
+    renderDial();
+  }
+
+  function setMode(next){
+    mode = next;
+    modeBtns.forEach(btn=> btn.classList.toggle('active', btn.dataset.mode === mode));
+    renderDial();
+  }
+
+  function renderDial(){
+    if(!popover.classList.contains('open')) return;
+    const { h, m } = currentParts();
+    dial.innerHTML = '';
+    const cx = 75, cy = 75, radius = 56;
+    const hourAngle = ((h % 12) + m / 60) * 30;
+    const minuteAngle = m * 6;
+    dial.insertAdjacentHTML('beforeend',
+      `<div class="clock-hand hour" style="transform:rotate(${hourAngle}deg)"></div>
+       <div class="clock-hand minute" style="transform:rotate(${minuteAngle}deg)"></div>`
+    );
+
+    for(let i=0; i<12; i++){
+      const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + radius * Math.cos(angle);
+      const y = cy + radius * Math.sin(angle);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.style.left = x + 'px';
+      btn.style.top = y + 'px';
+
+      if(mode === 'hour'){
+        const h12 = i === 0 ? 12 : i;
+        const h24 = h12 === 12 ? 0 : h12 + 12;
+        btn.className = 'clock-num' + (h === h12 || h === h24 ? ' selected' : '');
+        btn.innerHTML = `<span class="h12" data-hour="${h12}">${String(h12).padStart(2,'0')}</span><span class="h24" data-hour="${h24}">${String(h24).padStart(2,'0')}</span>`;
+        btn.addEventListener('click', (ev)=>{
+          const target = ev.target.closest('[data-hour]');
+          if(!target) return;
+          commit(parseInt(target.dataset.hour, 10), currentParts().m);
+          setMode('minute');
+        });
+      } else {
+        const minute = i * 5;
+        btn.className = 'clock-num minute-only' + (m === minute ? ' selected' : '');
+        btn.textContent = String(minute).padStart(2,'0');
+        btn.addEventListener('click', ()=>{
+          commit(currentParts().h, minute);
+        });
+      }
+      dial.appendChild(btn);
+    }
+  }
+
+  function open(){
+    closeAllClockPickers(picker);
+    if(!input.value) input.value = nowTime();
+    popover.classList.add('open');
+    toggle.classList.add('active');
+    toggle.setAttribute('aria-expanded', 'true');
+    setMode('hour');
+  }
+
+  function close(){
+    popover.classList.remove('open');
+    toggle.classList.remove('active');
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+
+  // Invalid text is left untouched so the user can correct it instead of losing it.
+  function applyTypedTime(){
+    const normalized = normalizeTimeInput(input.value);
+    if(normalized) input.value = normalized;
+    renderDial();
+  }
+
+  toggle.addEventListener('click', (ev)=>{
+    ev.stopPropagation();
+    if(popover.classList.contains('open')) close();
+    else open();
+  });
+  picker.addEventListener('click', (ev)=> ev.stopPropagation());
+  modeBtns.forEach(btn=> btn.addEventListener('click', ()=> setMode(btn.dataset.mode)));
+  input.addEventListener('input', ()=>{
+    let v = input.value.replace(/[^\d:]/g, '');
+    const colon = v.indexOf(':');
+    if(colon >= 0) v = v.slice(0, colon + 1) + v.slice(colon + 1).replace(/:/g, '');
+    input.value = v.slice(0, 5);
+    renderDial();
+  });
+  input.addEventListener('blur', applyTypedTime);
+  input.addEventListener('keydown', (ev)=>{
+    if(ev.key !== 'Enter') return;
+    ev.preventDefault();
+    applyTypedTime();
+    close();
+  });
+  if(nowBtn) nowBtn.addEventListener('click', ()=> setTime(nowTime()));
+  if(doneBtn) doneBtn.addEventListener('click', close);
+
+  if(initialValue) setTime(initialValue);
+
+  picker.setTime = setTime;
+  picker.getTime = ()=> normalizeTimeInput(input.value);
+  picker.closeClock = close;
+  return picker;
+}
+
+function closeAllClockPickers(except){
+  document.querySelectorAll('.clock-picker').forEach(p=>{
+    if(p !== except && typeof p.closeClock === 'function') p.closeClock();
+  });
+}
+
+document.addEventListener('click', ()=> closeAllClockPickers(null));
+document.addEventListener('keydown', (ev)=>{
+  if(ev.key === 'Escape') closeAllClockPickers(null);
+});
+
+function initClockPickers(root){
+  root.querySelectorAll('.clock-picker').forEach(picker=>{
+    if(picker.dataset.initialized) return;
+    initClockPicker(picker, picker.dataset.initial || '');
+  });
+}
+function sortEntriesByTime(items){
+  return [...items].sort((a,b)=>{
+    const ta = a.time || '';
+    const tb = b.time || '';
+    if(ta && tb) return ta.localeCompare(tb);
+    if(ta) return -1;
+    if(tb) return 1;
+    return (a.id || '').localeCompare(b.id || '');
+  });
+}
+function sortEntriesForExport(entries){
+  return [...entries].sort((a,b)=>
+    a.date.localeCompare(b.date)
+    || (a.time || '').localeCompare(b.time || '')
+    || (a.id || '').localeCompare(b.id || '')
+  );
+}
+
+function needsDescription(existing, description){
+  if(existing) return !!(existing.description || description);
+  return true;
+}
+
+function validateActivityFields(fields, existingEntry){
+  const { date, timeRaw, time, text, description, reason } = fields;
+  if(!date) return 'Bitte ein Datum wählen.';
+  if(!text) return 'Bitte eine Aktivität eintragen.';
+  if(String(timeRaw || '').trim() && !time){
+    return 'Uhrzeit bitte als HH:MM zwischen 00:00 und 23:59 eintragen – oder das Feld leer lassen.';
+  }
+  if(needsDescription(existingEntry, description) && !description){
+    return 'Bitte eine Beschreibung eintragen.';
+  }
+  if(!reason) return 'Bitte kurz begründen, warum du diese Stimmung gewählt hast.';
+  return '';
+}
+function fmtDate(iso){
+  const d = new Date(iso+"T00:00:00");
+  return d.toLocaleDateString('de-DE', {weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+}
+function esc(s){ const div = document.createElement('div'); div.textContent = s; return div.innerHTML; }
+function escAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ---- storage helpers (localStorage, with fallback to in-memory if blocked) ----
+let memoryFallback = {};
+let storageBlocked = false;
+function storageGet(key, def){
+  try{
+    const v = localStorage.getItem(key);
+    return v === null ? def : JSON.parse(v);
+  }catch(e){
+    storageBlocked = true;
+    document.getElementById('storage-warn').style.display = 'block';
+    return (key in memoryFallback) ? memoryFallback[key] : def;
+  }
+}
+function storageSet(key, value){
+  try{
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  }catch(e){
+    storageBlocked = true;
+    document.getElementById('storage-warn').style.display = 'block';
+    memoryFallback[key] = value;
+    return false;
+  }
+}
+
+// ---- Tabs ----
+function activateTab(name){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.id === 'tab-'+name));
+}
+
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=> activateTab(btn.dataset.tab));
+});
+
+// ---- Tagebuch ----
+document.getElementById('log-date').value = todayISO();
+const logTimePicker = initClockPicker(document.getElementById('log-time-picker'), '');
+const moodSlider = document.getElementById('log-mood');
+const moodReadout = document.getElementById('mood-readout');
+moodSlider.addEventListener('input', ()=>{ moodReadout.textContent = moodSlider.value; });
+
+// ---- Tagesgefühl (one self-rating per date, independent of activities) ----
+function loadDays(){
+  const data = storageGet('tracker_days', {});
+  return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+}
+function saveDays(days){ return storageSet('tracker_days', days); }
+function readDayReview(days, date){
+  const raw = days ? days[date] : null;
+  if(!raw || typeof raw !== 'object') return null;
+  const mood = parseInt(raw.mood, 10);
+  if(isNaN(mood) || mood < 0 || mood > 10) return null;
+  return { mood, note: typeof raw.note === 'string' ? raw.note : '' };
+}
+function getDayReview(date){ return readDayReview(loadDays(), date); }
+
+function loadEntries(){ return storageGet('tracker_entries', []); }
+function saveEntries(entries){ return storageSet('tracker_entries', entries); }
+
+let openDayDate = null;
+let editingEntryId = null;
+
+function renderActivityRow(it){
+  if(editingEntryId === it.id){
+    return `
+      <div class="activity-edit" data-edit-id="${it.id}">
+        <div class="datetime-row">
+          <div class="field-group">
+            <label>Datum</label>
+            <input type="date" class="edit-date" value="${it.date}">
+          </div>
+          <div class="field-group">
+            <label>Uhrzeit <span class="optional">(optional)</span></label>
+            <div class="clock-picker">
+              <input type="text" class="edit-time clock-input" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off" value="${escAttr(fmtTime(it.time || ''))}">
+              <button type="button" class="clock-toggle" title="Uhr öffnen" aria-label="Uhr öffnen" aria-expanded="false">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+              </button>
+              <div class="clock-popover">
+                <div class="clock-mode">
+                  <button type="button" class="active" data-mode="hour">Stunde</button>
+                  <button type="button" data-mode="minute">Minute</button>
+                </div>
+                <div class="clock-dial"></div>
+                <div class="clock-footer">
+                  <button type="button" class="btn small secondary clock-now-btn">Jetzt</button>
+                  <button type="button" class="btn small clock-done-btn">Fertig</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Aktivität</label>
+          <input type="text" class="edit-text" value="${escAttr(it.text)}">
+        </div>
+        <div class="field-group">
+          <label>Beschreibung</label>
+          <textarea class="edit-description" rows="2" placeholder="z. B. 30 Min. im Park …">${esc(it.description || '')}</textarea>
+        </div>
+        <div class="field-group">
+          <label>Stimmung: <span class="edit-mood-readout">${it.mood}</span></label>
+          <div class="mood-wrap">
+            <input type="range" class="edit-mood" min="0" max="10" step="1" value="${it.mood}">
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Warum diese Stimmung?</label>
+          <textarea class="edit-reason" rows="2">${esc(it.reason || '')}</textarea>
+        </div>
+        <div class="activity-edit-actions">
+          <button type="button" class="btn small save-edit" data-id="${it.id}">Speichern</button>
+          <button type="button" class="btn small secondary cancel-edit">Abbrechen</button>
+        </div>
+        <div class="status edit-status"></div>
+      </div>
+    `;
+  }
+  const timeLabel = it.time ? `<div class="meta">${esc(fmtTime(it.time))}</div>` : '';
+  return `
+    <div class="activity" data-id="${it.id}">
+      <div class="num">${it.mood}</div>
+      <div class="body">
+        ${timeLabel}
+        <div class="txt">${esc(it.text)}</div>
+        ${it.description ? `<div class="desc">${esc(it.description)}</div>` : ''}
+        ${it.reason ? `<div class="reason">${esc(it.reason)}</div>` : ''}
+      </div>
+      <div class="activity-actions">
+        <button type="button" class="edit" data-id="${it.id}" title="Bearbeiten">✎</button>
+        <button type="button" class="delete" data-id="${it.id}" title="Löschen">×</button>
+      </div>
+    </div>
+  `;
+}
+
+function bindActivityEditors(list){
+  initClockPickers(list);
+
+  list.querySelectorAll('.edit-mood').forEach(slider=>{
+    slider.addEventListener('input', ()=>{
+      const readout = slider.closest('.activity-edit').querySelector('.edit-mood-readout');
+      if(readout) readout.textContent = slider.value;
+    });
+  });
+
+  list.querySelectorAll('.cancel-edit').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      editingEntryId = null;
+      renderEntries();
+    });
+  });
+
+  list.querySelectorAll('.save-edit').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      const wrap = btn.closest('.activity-edit');
+      const id = btn.dataset.id;
+      const date = wrap.querySelector('.edit-date').value;
+      const timeRaw = wrap.querySelector('.edit-time').value;
+      const time = normalizeTimeInput(timeRaw);
+      const text = wrap.querySelector('.edit-text').value.trim();
+      const description = wrap.querySelector('.edit-description').value.trim();
+      const mood = parseInt(wrap.querySelector('.edit-mood').value, 10);
+      const reason = wrap.querySelector('.edit-reason').value.trim();
+      const status = wrap.querySelector('.edit-status');
+
+      const entries = loadEntries();
+      const idx = entries.findIndex(e=>e.id === id);
+      if(idx < 0) return;
+
+      const error = validateActivityFields({ date, timeRaw, time, text, description, reason }, entries[idx]);
+      if(error){
+        status.textContent = error;
+        status.className = 'status edit-status error';
+        return;
+      }
+
+      openDayDate = date;
+      entries[idx] = { ...entries[idx], date, time, text, description, mood, reason };
+      saveEntries(entries);
+      editingEntryId = null;
+      renderEntries();
+    });
+  });
+
+  list.querySelectorAll('button.edit[data-id]').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      editingEntryId = btn.dataset.id;
+      const entry = loadEntries().find(e=>e.id === editingEntryId);
+      if(entry) openDayDate = entry.date;
+      renderEntries();
+    });
+  });
+
+  list.querySelectorAll('button.delete[data-id]').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      if(!confirm('Diese Aktivität wirklich löschen?')) return;
+      const remaining = loadEntries().filter(e=>e.id !== btn.dataset.id);
+      if(editingEntryId === btn.dataset.id) editingEntryId = null;
+      saveEntries(remaining);
+      renderEntries();
+    });
+  });
+}
+
+function groupByDate(entries){
+  const byDate = {};
+  entries.forEach(e=>{
+    if(!byDate[e.date]) byDate[e.date] = [];
+    byDate[e.date].push(e);
+  });
+  return byDate;
+}
+
+function getISOWeekStart(iso){
+  const d = new Date(iso + 'T00:00:00');
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${dd}`;
+}
+
+function fmtWeekLabel(weekStart){
+  const start = new Date(weekStart + 'T00:00:00');
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const fmt = (dt)=> dt.toLocaleDateString('de-DE', {day:'2-digit', month:'short'});
+  return fmt(start) + ' – ' + fmt(end) + ' ' + start.getFullYear();
+}
+
+function getAvailablePeriods(allDates){
+  const dates = [...new Set(allDates)].sort();
+  const years = [...new Set(dates.map(d=>d.slice(0,4)))].sort((a,b)=>b.localeCompare(a));
+  const months = [...new Set(dates.map(d=>d.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+  const weeks = [...new Set(dates.map(getISOWeekStart))].sort((a,b)=>b.localeCompare(a));
+  return { dates, years, months, weeks };
+}
+
+function populateChartSelectors(allDates){
+  const { years, months, weeks } = getAvailablePeriods(allDates);
+  const period = document.getElementById('chart-period').value;
+  const yearSel = document.getElementById('chart-year');
+  const monthSel = document.getElementById('chart-month');
+  const weekSel = document.getElementById('chart-week');
+
+  const prevYear = yearSel.value;
+  const prevMonth = monthSel.value;
+  const prevWeek = weekSel.value;
+
+  yearSel.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  monthSel.innerHTML = months.map(m=>{
+    const [y, mo] = m.split('-');
+    const label = new Date(+y, +mo-1, 1).toLocaleDateString('de-DE', {month:'long', year:'numeric'});
+    return `<option value="${m}">${label}</option>`;
+  }).join('');
+  weekSel.innerHTML = weeks.map(w=>`<option value="${w}">${fmtWeekLabel(w)}</option>`).join('');
+
+  document.getElementById('chart-year-wrap').style.display = period==='year' && years.length ? '' : 'none';
+  document.getElementById('chart-month-wrap').style.display = period==='month' && months.length ? '' : 'none';
+  document.getElementById('chart-week-wrap').style.display = period==='week' && weeks.length ? '' : 'none';
+
+  if(years.includes(prevYear)) yearSel.value = prevYear;
+  else if(years.length) yearSel.value = years[0];
+  if(months.includes(prevMonth)) monthSel.value = prevMonth;
+  else if(months.length) monthSel.value = months[0];
+  if(weeks.includes(prevWeek)) weekSel.value = prevWeek;
+  else if(weeks.length) weekSel.value = weeks[0];
+}
+
+function filterDayTotals(byDate, days){
+  const period = document.getElementById('chart-period').value;
+  let dates = [...new Set([...Object.keys(byDate), ...Object.keys(days || {})])].sort();
+
+  if(period === 'year'){
+    const y = document.getElementById('chart-year').value;
+    dates = dates.filter(d=>d.startsWith(y));
+  } else if(period === 'month'){
+    const m = document.getElementById('chart-month').value;
+    dates = dates.filter(d=>d.startsWith(m));
+  } else if(period === 'week'){
+    const w = document.getElementById('chart-week').value;
+    dates = dates.filter(d=>getISOWeekStart(d) === w);
+  }
+
+  return dates.map(d=>{
+    const items = byDate[d] || [];
+    const sum = items.reduce((s,i)=>s+i.mood,0);
+    const review = readDayReview(days, d);
+    return {
+      date: d,
+      sum: items.length ? sum : null,
+      count: items.length || null,
+      avg: items.length ? sum / items.length : null,
+      dayMood: review ? review.mood : null
+    };
+  });
+}
+
+function niceScaleMax(value, isInt){
+  const v = Math.max(value, isInt ? 1 : 0.1);
+  if(isInt && v <= 5) return 5;
+  if(isInt && v <= 10) return 10;
+  const exp = Math.pow(10, Math.floor(Math.log10(v)));
+  const frac = v / exp;
+  const nice = frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10;
+  return nice * exp;
+}
+
+function buildGridLines(min, max, padX, w, padRight, moodToY, isInt){
+  const steps = isInt ? Math.min(max, 5) : 4;
+  const lines = [];
+  for(let i = 0; i <= steps; i++){
+    const val = min + (max - min) * (i / steps);
+    const display = isInt ? Math.round(val) : (Math.round(val * 10) / 10);
+    const y = moodToY(display);
+    const dashed = i > 0 && i < steps;
+    lines.push(`<line x1="${padX}" y1="${y.toFixed(1)}" x2="${w-padRight}" y2="${y.toFixed(1)}" stroke="#DAD5C4" stroke-width="1"${dashed ? ' stroke-dasharray="4 4"' : ''}/>
+      <text x="${padX - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" fill="#6B6656" font-size="9" font-family="Inter,sans-serif">${display}</text>`);
+  }
+  return lines.join('');
+}
+
+function renderSparkline(dayTotals){
+  const svg = document.getElementById('spark');
+  const statsEl = document.getElementById('spark-stats');
+  const hintEl = document.getElementById('chart-hint');
+  const metric = document.getElementById('chart-metric').value;
+
+  const metricConfig = {
+    avg: {
+      hint: 'Durchschnittliche Stimmung pro Tag (0–10) – unabhängig von der Anzahl der Aktivitäten. Tage sind fair vergleichbar.',
+      getValue: d => d.avg,
+      format: v => v.toFixed(1),
+      statLabel: 'Ø Stimmung',
+      fixedMin: 0,
+      fixedMax: 10,
+      isInt: false
+    },
+    dayMood: {
+      hint: 'Dein Tagesgefühl (0–10), so wie du den ganzen Tag selbst eingeschätzt hast. Nur Tage mit Eintrag erscheinen in der Kurve.',
+      getValue: d => d.dayMood,
+      format: v => String(v),
+      statLabel: 'Ø Tagesgefühl',
+      fixedMin: 0,
+      fixedMax: 10,
+      isInt: false
+    },
+    sum: {
+      hint: 'Summe aller Stimmungswerte pro Tag – Tage mit mehr Aktivitäten können höher liegen.',
+      getValue: d => d.sum,
+      format: v => String(Math.round(v)),
+      statLabel: 'Summe',
+      fixedMin: null,
+      fixedMax: null,
+      isInt: true
+    },
+    count: {
+      hint: 'Anzahl der eingetragenen Aktivitäten pro Tag – zeigt, an welchen Tagen du besonders aktiv warst.',
+      getValue: d => d.count,
+      format: v => String(v),
+      statLabel: 'Aktivitäten',
+      fixedMin: null,
+      fixedMax: null,
+      isInt: true
+    }
+  };
+  const cfg = metricConfig[metric] || metricConfig.avg;
+  hintEl.textContent = cfg.hint;
+
+  const usable = dayTotals.filter(d=>{
+    const v = cfg.getValue(d);
+    return v !== null && v !== undefined && !isNaN(v);
+  });
+
+  if(usable.length < 2){
+    const note = usable.length === 1
+      ? 'Nur ein Tag mit Daten im Zeitraum – mindestens 2 Tage für eine Kurve nötig.'
+      : 'Keine Daten für diese Anzeige im gewählten Zeitraum.';
+    svg.innerHTML = `<text x="300" y="75" text-anchor="middle" fill="#6B6656" font-size="13" font-family="Inter,sans-serif">${note}</text>`;
+    statsEl.innerHTML = usable.length === 1
+      ? `<span>${cfg.statLabel}: <strong>${cfg.format(cfg.getValue(usable[0]))}</strong></span>`
+      : '';
+    return;
+  }
+
+  const w = 600, h = 140, padX = 36, padY = 24, padRight = 12;
+  const chartH = h - padY * 2;
+  const values = usable.map(d => cfg.getValue(d));
+  const scaleMin = cfg.fixedMin !== null ? cfg.fixedMin : 0;
+  const scaleMax = cfg.fixedMax !== null ? cfg.fixedMax : niceScaleMax(Math.max(...values), cfg.isInt);
+  const valToY = (val)=> padY + chartH - ((val - scaleMin) / (scaleMax - scaleMin)) * chartH;
+
+  const step = (w - padX - padRight) / (usable.length - 1);
+  const pts = usable.map((d,i)=>{
+    const x = padX + i * step;
+    const value = cfg.getValue(d);
+    const y = valToY(value);
+    return { x, y, value, ...d };
+  });
+
+  const linePath = pts.map((p,i)=> (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
+  const areaPath = linePath + ` L${pts[pts.length-1].x.toFixed(1)},${valToY(scaleMin).toFixed(1)} L${pts[0].x.toFixed(1)},${valToY(scaleMin).toFixed(1)} Z`;
+  const gridLines = buildGridLines(scaleMin, scaleMax, padX, w, padRight, valToY, cfg.isInt && metric !== 'avg');
+
+  const dots = pts.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5" fill="#B9822E" stroke="#fff" stroke-width="2"/>`).join('');
+  const valueLabels = pts.map(p=>`
+    <text x="${p.x.toFixed(1)}" y="${(p.y - 9).toFixed(1)}" text-anchor="middle" fill="#46523A" font-size="10" font-weight="600" font-family="Inter,sans-serif">${cfg.format(p.value)}</text>
+  `).join('');
+  const dateLabels = pts.length <= 14 ? pts.map(p=>{
+    const lbl = new Date(p.date+'T00:00:00').toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'});
+    return `<text x="${p.x.toFixed(1)}" y="${h-4}" text-anchor="middle" fill="#6B6656" font-size="10" font-family="Inter,sans-serif">${lbl}</text>`;
+  }).join('') : '';
+
+  svg.innerHTML = `${gridLines}<path d="${areaPath}" fill="#B9822E" opacity="0.12"/><path d="${linePath}" fill="none" stroke="#B9822E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}${valueLabels}${dateLabels}`;
+
+  const totalActs = usable.reduce((s,d)=>s+(d.count || 0),0);
+  const totalSum = usable.reduce((s,d)=>s+(d.sum || 0),0);
+  const avgValue = (values.reduce((s,v)=>s+v,0) / usable.length).toFixed(1);
+
+  if(metric === 'avg'){
+    statsEl.innerHTML = `
+      <span>Tage: <strong>${usable.length}</strong></span>
+      <span>Ø Stimmung: <strong>${avgValue}</strong></span>
+      <span>Aktivitäten gesamt: <strong>${totalActs}</strong></span>
+    `;
+  } else if(metric === 'dayMood'){
+    statsEl.innerHTML = `
+      <span>Tage mit Eintrag: <strong>${usable.length}</strong></span>
+      <span>Ø Tagesgefühl: <strong>${avgValue}</strong></span>
+      <span>Bester Tag: <strong>${Math.max(...values)}</strong></span>
+      <span>Schwerster Tag: <strong>${Math.min(...values)}</strong></span>
+    `;
+  } else if(metric === 'sum'){
+    statsEl.innerHTML = `
+      <span>Tage: <strong>${usable.length}</strong></span>
+      <span>Summe gesamt: <strong>${totalSum}</strong></span>
+      <span>Ø Summe pro Tag: <strong>${(totalSum / usable.length).toFixed(1)}</strong></span>
+      <span>Aktivitäten gesamt: <strong>${totalActs}</strong></span>
+    `;
+  } else {
+    statsEl.innerHTML = `
+      <span>Tage: <strong>${usable.length}</strong></span>
+      <span>Aktivitäten gesamt: <strong>${totalActs}</strong></span>
+      <span>Ø Aktivitäten pro Tag: <strong>${(totalActs / usable.length).toFixed(1)}</strong></span>
+      <span>Meiste an einem Tag: <strong>${Math.max(...values)}</strong></span>
+    `;
+  }
+}
+
+function renderDayReview(date, review){
+  if(review){
+    return `
+      <div class="day-review">
+        <div class="day-review-head">
+          <span class="day-review-score">${review.mood}</span>
+          <span class="day-review-label">Tagesgefühl</span>
+          <button type="button" class="btn small secondary edit-day-review" data-date="${date}">Bearbeiten</button>
+        </div>
+        ${review.note ? `<div class="day-review-note">${esc(review.note)}</div>` : ''}
+      </div>
+    `;
+  }
+  return `
+    <div class="day-review is-empty">
+      <span class="day-review-label">Noch kein Tagesgefühl für diesen Tag festgehalten.</span>
+      <button type="button" class="btn small secondary edit-day-review" data-date="${date}">Eintragen</button>
+    </div>
+  `;
+}
+
+function renderEntries(){
+  const entries = loadEntries();
+  const days = loadDays();
+  const list = document.getElementById('entries-list');
+
+  const byDate = groupByDate(entries);
+  const allDates = [...new Set([...Object.keys(byDate), ...Object.keys(days)])];
+
+  populateChartSelectors(allDates);
+  const dayTotals = filterDayTotals(byDate, days);
+  renderSparkline(dayTotals);
+  renderDayReviewList(days);
+
+  if(allDates.length === 0){
+    list.innerHTML = '<div class="empty">Noch keine Einträge. Trag deine erste Aktivität oben ein oder halte dein Tagesgefühl fest.</div>';
+    return;
+  }
+
+  const dates = allDates.sort((a,b)=>b.localeCompare(a));
+
+  list.innerHTML = dates.map(date=>{
+    const items = sortEntriesByTime(byDate[date] || []);
+    const sum = items.reduce((s,i)=>s+i.mood,0);
+    const review = readDayReview(days, date);
+    const isOpen = openDayDate === date;
+    const rows = items.length
+      ? items.map(it=> renderActivityRow(it)).join('')
+      : '<div class="empty">Keine Aktivitäten an diesem Tag.</div>';
+    const badge = review ? `<span class="day-mood-badge" title="Tagesgefühl">Tag ${review.mood}</span>` : '';
+    const stats = items.length
+      ? `Summe ${sum} · Ø ${(sum/items.length).toFixed(1)} · ${items.length} Aktivität${items.length===1?'':'en'}`
+      : 'Keine Aktivitäten';
+    return `
+      <div class="day-group${isOpen?' open':''}" data-date="${date}">
+        <button type="button" class="day-toggle" aria-expanded="${isOpen}">
+          <div class="day-head" style="margin:0;flex:1;">
+            <div class="d">${fmtDate(date)} <span class="chevron">▶</span></div>
+            <div class="stats">${badge}${stats}</div>
+          </div>
+        </button>
+        <div class="day-body">${renderDayReview(date, review)}${rows}</div>
+      </div>
+    `;
+  }).join('');
+
+  list.querySelectorAll('.edit-day-review').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      openDayInTab(btn.dataset.date);
+    });
+  });
+
+  list.querySelectorAll('.day-toggle').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const date = btn.closest('.day-group').dataset.date;
+      openDayDate = openDayDate === date ? null : date;
+      if(openDayDate) document.getElementById('log-date').value = openDayDate;
+      renderEntries();
+      if(openDayDate){
+        const el = list.querySelector(`.day-group[data-date="${openDayDate}"]`);
+        if(el) el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      }
+    });
+  });
+
+  bindActivityEditors(list);
+}
+
+['chart-metric','chart-period','chart-year','chart-month','chart-week'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', renderEntries);
+});
+
+document.getElementById('save-entry').addEventListener('click', ()=>{
+  const date = document.getElementById('log-date').value;
+  const timeRaw = document.getElementById('log-time').value;
+  const time = normalizeTimeInput(timeRaw);
+  const text = document.getElementById('log-activity').value.trim();
+  const description = document.getElementById('log-description').value.trim();
+  const reason = document.getElementById('log-reason').value.trim();
+  const mood = parseInt(moodSlider.value);
+  const status = document.getElementById('log-status');
+  status.className = 'status';
+
+  const error = validateActivityFields({ date, timeRaw, time, text, description, reason });
+  if(error){
+    status.textContent = error;
+    status.className = 'status error';
+    return;
+  }
+
+  const entries = loadEntries();
+  entries.push({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), date, time, mood, text, description, reason});
+  const ok = saveEntries(entries);
+  status.textContent = ok ? 'Hinzugefügt.' : 'Konnte nicht dauerhaft gespeichert werden (nur für diese Sitzung).';
+  status.className = ok ? 'status' : 'status error';
+  document.getElementById('log-activity').value = '';
+  document.getElementById('log-description').value = '';
+  document.getElementById('log-reason').value = '';
+  logTimePicker.setTime('');
+  document.getElementById('log-activity').focus();
+  renderEntries();
+  setTimeout(()=>{status.textContent='';}, 2500);
+});
+
+// ---- Tagesgefühl form ----
+const dayDateInput = document.getElementById('day-date');
+const dayMoodSlider = document.getElementById('day-mood');
+const dayMoodReadout = document.getElementById('day-mood-readout');
+const dayNoteInput = document.getElementById('day-note');
+const deleteDayBtn = document.getElementById('delete-day');
+
+dayMoodSlider.addEventListener('input', ()=>{ dayMoodReadout.textContent = dayMoodSlider.value; });
+
+function loadDayIntoForm(date){
+  const review = getDayReview(date);
+  dayDateInput.value = date;
+  dayMoodSlider.value = review ? review.mood : 5;
+  dayMoodReadout.textContent = dayMoodSlider.value;
+  dayNoteInput.value = review ? review.note : '';
+  deleteDayBtn.style.display = review ? '' : 'none';
+}
+
+dayDateInput.addEventListener('change', ()=>{
+  if(dayDateInput.value) loadDayIntoForm(dayDateInput.value);
+});
+
+function openDayInTab(date){
+  activateTab('day');
+  loadDayIntoForm(date);
+  window.scrollTo({ top:0, behavior:'smooth' });
+  dayNoteInput.focus({ preventScroll:true });
+}
+
+function renderDayReviewList(days){
+  const list = document.getElementById('day-review-list');
+  const dates = Object.keys(days).filter(d=>readDayReview(days, d)).sort((a,b)=>b.localeCompare(a));
+  if(!dates.length){
+    list.innerHTML = '<div class="empty">Noch kein Tagesgefühl festgehalten.</div>';
+    return;
+  }
+  list.innerHTML = dates.map(date=>{
+    const review = readDayReview(days, date);
+    return `
+      <button type="button" class="day-review-row" data-date="${date}">
+        <span class="score">${review.mood}</span>
+        <span class="content">
+          <span class="d">${fmtDate(date)}</span>
+          ${review.note ? `<span class="note">${esc(review.note)}</span>` : ''}
+        </span>
+      </button>
+    `;
+  }).join('');
+
+  list.querySelectorAll('.day-review-row').forEach(btn=>{
+    btn.addEventListener('click', ()=> openDayInTab(btn.dataset.date));
+  });
+}
+
+document.getElementById('save-day').addEventListener('click', ()=>{
+  const date = dayDateInput.value;
+  const status = document.getElementById('day-status');
+  status.className = 'status';
+  if(!date){
+    status.textContent = 'Bitte ein Datum wählen.';
+    status.className = 'status error';
+    return;
+  }
+  const days = loadDays();
+  days[date] = { mood: parseInt(dayMoodSlider.value, 10), note: dayNoteInput.value.trim() };
+  const ok = saveDays(days);
+  status.textContent = ok ? 'Tagesgefühl gespeichert.' : 'Konnte nicht dauerhaft gespeichert werden (nur für diese Sitzung).';
+  status.className = ok ? 'status' : 'status error';
+  loadDayIntoForm(date);
+  renderEntries();
+  setTimeout(()=>{status.textContent='';}, 2500);
+});
+
+deleteDayBtn.addEventListener('click', ()=>{
+  const date = dayDateInput.value;
+  if(!getDayReview(date)) return;
+  if(!confirm('Tagesgefühl für diesen Tag löschen?')) return;
+  const days = loadDays();
+  delete days[date];
+  saveDays(days);
+  loadDayIntoForm(date);
+  renderEntries();
+});
+
+document.getElementById('export-csv').addEventListener('click', ()=>{
+  const entries = sortEntriesForExport(loadEntries());
+  const days = loadDays();
+  const escCsv = (v)=> '"' + String(v).replace(/"/g,'""') + '"';
+  let csv = 'Datum;Uhrzeit;Aktivitaet;Beschreibung;Stimmung (0-10);Stimmungsgrund;Tagesgefuehl (0-10);Tagesnotiz\n';
+
+  const dayCells = (date)=>{
+    const review = readDayReview(days, date);
+    return [review ? review.mood : '', escCsv(review ? review.note : '')];
+  };
+
+  entries.forEach(e=>{
+    csv += [
+      escCsv(e.date), escCsv(e.time || ''), escCsv(e.text), escCsv(e.description || ''),
+      e.mood, escCsv(e.reason || ''), ...dayCells(e.date)
+    ].join(';') + '\n';
+  });
+
+  // Days that only have a Tagesgefühl still need a row so nothing is lost on re-import.
+  const datesWithEntries = new Set(entries.map(e=>e.date));
+  Object.keys(days).filter(d=>!datesWithEntries.has(d) && readDayReview(days, d)).sort().forEach(date=>{
+    csv += [
+      escCsv(date), escCsv(''), escCsv(''), escCsv(''),
+      '', escCsv(''), ...dayCells(date)
+    ].join(';') + '\n';
+  });
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'aktivitaeten-tracker_' + todayISO() + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+function parseCsvLine(line, sep){
+  const result = [];
+  let cur = '', inQuotes = false;
+  for(let i=0; i<line.length; i++){
+    const ch = line[i];
+    if(inQuotes){
+      if(ch === '"'){
+        if(line[i+1] === '"'){ cur += '"'; i++; }
+        else inQuotes = false;
+      } else cur += ch;
+    } else {
+      if(ch === '"') inQuotes = true;
+      else if(ch === sep) { result.push(cur); cur = ''; }
+      else cur += ch;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function parseCsvImport(text){
+  const empty = { rows: [], dayReviews: {} };
+  text = text.replace(/^\ufeff/, '').trim();
+  if(!text) return empty;
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length < 2) return empty;
+
+  const header = lines[0].toLowerCase();
+  const sep = header.includes(';') ? ';' : ',';
+  const cols = parseCsvLine(lines[0], sep).map(c=>c.trim().toLowerCase());
+
+  const dateIdx = cols.findIndex(c=>c.includes('datum') || c === 'date');
+  const timeIdx = cols.findIndex(c=>c.includes('uhrzeit') || c.includes('time') || c === 'zeit');
+  const actIdx = cols.findIndex(c=>(c.includes('aktiv') || c.includes('activity')) && !c.includes('beschreib'));
+  const descIdx = cols.findIndex(c=>c.includes('beschreib') || c.includes('description'));
+  const moodIdx = cols.findIndex(c=>(c.includes('stimmung') || c.includes('mood')) && !c.includes('tages') && !c.includes('day'));
+  const reasonIdx = cols.findIndex(c=>c.includes('grund') || c.includes('reason') || c.includes('begr'));
+  const dayMoodIdx = cols.findIndex(c=>c.includes('tagesgef') || c.includes('tagesstimmung') || c.includes('day mood'));
+  const dayNoteIdx = cols.findIndex(c=>c.includes('tagesnotiz') || c.includes('day note'));
+
+  if(dateIdx < 0 || actIdx < 0 || moodIdx < 0){
+    throw new Error('CSV muss Spalten für Datum, Aktivität und Stimmung enthalten.');
+  }
+
+  const rows = [];
+  const dayReviews = {};
+  for(let i=1; i<lines.length; i++){
+    const parts = parseCsvLine(lines[i], sep);
+    if(parts.length < 3) continue;
+    const dateRaw = parts[dateIdx].trim();
+
+    let date = dateRaw;
+    const deMatch = dateRaw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if(deMatch){
+      date = `${deMatch[3]}-${deMatch[2].padStart(2,'0')}-${deMatch[1].padStart(2,'0')}`;
+    } else if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){
+      continue;
+    }
+
+    if(dayMoodIdx >= 0 && !(date in dayReviews)){
+      const dayMood = parseInt(parts[dayMoodIdx], 10);
+      if(!isNaN(dayMood) && dayMood >= 0 && dayMood <= 10){
+        dayReviews[date] = {
+          mood: dayMood,
+          note: dayNoteIdx >= 0 ? (parts[dayNoteIdx] || '').trim() : ''
+        };
+      }
+    }
+
+    const textVal = parts[actIdx].trim();
+    const mood = parseInt(parts[moodIdx], 10);
+    const time = timeIdx >= 0 ? fmtTime((parts[timeIdx] || '').trim()) : '';
+    const description = descIdx >= 0 ? (parts[descIdx] || '').trim() : '';
+    const reason = reasonIdx >= 0 ? (parts[reasonIdx] || '').trim() : '';
+    if(!textVal || isNaN(mood)) continue;
+    if(mood < 0 || mood > 10) continue;
+    rows.push({ date, time, text: textVal, description, mood, reason });
+  }
+  return { rows, dayReviews };
+}
+
+function mergeImportedDays(dayReviews){
+  const days = loadDays();
+  let changed = 0;
+  Object.keys(dayReviews).forEach(date=>{
+    const incoming = dayReviews[date];
+    const existing = readDayReview(days, date);
+    if(existing && existing.mood === incoming.mood && existing.note === incoming.note) return;
+    days[date] = incoming;
+    changed++;
+  });
+  if(changed) saveDays(days);
+  return changed;
+}
+
+function mergeImportedRows(rows){
+  const entries = loadEntries();
+  let added = 0, updated = 0;
+  rows.forEach(row=>{
+    const idx = entries.findIndex(e=> e.date === row.date && e.text.toLowerCase() === row.text.toLowerCase());
+    if(idx >= 0){
+      let changed = false;
+      if(entries[idx].mood !== row.mood){ entries[idx].mood = row.mood; changed = true; }
+      if((entries[idx].time || '') !== (row.time || '')){ entries[idx].time = row.time || ''; changed = true; }
+      if((entries[idx].description || '') !== (row.description || '')){ entries[idx].description = row.description || ''; changed = true; }
+      if(row.reason && entries[idx].reason !== row.reason){ entries[idx].reason = row.reason; changed = true; }
+      if(changed) updated++;
+    } else {
+      entries.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,6) + added,
+        date: row.date,
+        time: row.time || '',
+        text: row.text,
+        description: row.description || '',
+        mood: row.mood,
+        reason: row.reason || ''
+      });
+      added++;
+    }
+  });
+  saveEntries(entries);
+  return { added, updated };
+}
+
+document.getElementById('import-csv-btn').addEventListener('click', ()=>{
+  document.getElementById('import-csv').click();
+});
+
+document.getElementById('import-csv').addEventListener('change', (ev)=>{
+  const file = ev.target.files[0];
+  const status = document.getElementById('import-status');
+  status.className = 'status';
+  status.textContent = '';
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const { rows, dayReviews } = parseCsvImport(reader.result);
+      if(rows.length === 0 && Object.keys(dayReviews).length === 0){
+        status.textContent = 'Keine gültigen Zeilen in der CSV gefunden.';
+        status.className = 'status error';
+        return;
+      }
+      const { added, updated } = mergeImportedRows(rows);
+      const dayCount = mergeImportedDays(dayReviews);
+      const dayPart = dayCount ? `, ${dayCount} Tagesgefühl${dayCount === 1 ? '' : 'e'}` : '';
+      status.textContent = `Import abgeschlossen: ${added} neu, ${updated} aktualisiert${dayPart}.`;
+      loadDayIntoForm(dayDateInput.value || todayISO());
+      renderEntries();
+    } catch(err){
+      status.textContent = err.message || 'CSV konnte nicht gelesen werden.';
+      status.className = 'status error';
+    }
+    ev.target.value = '';
+    setTimeout(()=>{ status.textContent = ''; }, 4000);
+  };
+  reader.onerror = ()=>{
+    status.textContent = 'Datei konnte nicht gelesen werden.';
+    status.className = 'status error';
+    ev.target.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+loadDayIntoForm(todayISO());
+renderEntries();
+</script>
+</body>
+</html>
