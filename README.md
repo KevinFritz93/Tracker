@@ -41,8 +41,13 @@ muss die Adresse der veröffentlichten App unter
 nach der Google-Weiterleitung ab:
 
 - **Site URL:** `https://kevinfritz93.github.io/Tracker/`
-- **Redirect URLs:** `https://kevinfritz93.github.io/Tracker/` zusätzlich
-  eintragen (bei lokalen Tests auch `http://localhost:8000/`)
+- **Redirect URLs:** `https://kevinfritz93.github.io/Tracker/**` eintragen
+  (bei lokalen Tests zusätzlich `http://localhost:8000/**`)
+
+Der Stern am Ende ist wichtig: die installierte App und ein normaler Tab
+können unter leicht unterschiedlichen Adressen laufen. Steht die angefragte
+Adresse nicht in der Liste, leitet Supabase auf seine Standard-Site-URL um –
+das ist die Ursache der Fehlermeldung `localhost:3000` nach dem Google-Login.
 
 ### 3. Veröffentlichen
 

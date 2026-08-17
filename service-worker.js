@@ -1,5 +1,5 @@
 // Bump VERSION to force clients onto a fresh cache after a deploy.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `tracker-${VERSION}`;
 
 // Relative URLs so the app works both at a domain root and under a

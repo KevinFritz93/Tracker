@@ -1857,11 +1857,22 @@ function scheduleSync(){
   syncTimer = setTimeout(syncNow, 600);
 }
 
+// Always the directory, never .../index.html: the installed app and a normal
+// browser tab must ask for the same return address, otherwise Supabase treats
+// one of them as unlisted and falls back to its default Site URL.
+function appBaseUrl(){
+  const url = new URL(window.location.href);
+  url.hash = '';
+  url.search = '';
+  url.pathname = url.pathname.replace(/[^/]*$/, '');
+  return url.toString();
+}
+
 document.getElementById('sign-in').addEventListener('click', async ()=>{
   if(!sb) return;
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin + window.location.pathname }
+    options: { redirectTo: appBaseUrl() }
   });
   if(error){
     lastSyncError = error.message;
