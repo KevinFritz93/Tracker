@@ -2,8 +2,15 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Aktivitäten-Tracker</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#faf7f0">
+<link rel="icon" href="./icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tracker">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -26,6 +33,19 @@
   h1{font-family:'Fraunces', serif;font-weight:600;font-size:clamp(28px,5vw,40px);margin:0 0 6px;letter-spacing:-0.01em;}
   .sub{color:var(--ink-soft);font-size:15px;max-width:60ch;line-height:1.5;}
   .warn{background:#FBF3E3;border:1px solid #E7D5A8;color:#7A5B1E;font-size:12.5px;border-radius:8px;padding:9px 12px;margin-bottom:18px;line-height:1.5;}
+
+  .syncbar{display:flex;align-items:center;gap:11px;flex-wrap:wrap;background:var(--paper-2);border:1px solid var(--line);border-radius:9px;padding:10px 13px;margin-bottom:18px;}
+  .syncbar .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-soft);flex-shrink:0;}
+  .syncbar.is-synced .dot{background:var(--moss);}
+  .syncbar.is-pending .dot{background:#C9962F;}
+  .syncbar.is-error .dot{background:var(--bad);}
+  .syncbar.is-syncing .dot{background:var(--moss);animation:pulse 1.1s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .syncbar-text{flex:1;min-width:170px;display:flex;flex-direction:column;gap:2px;}
+  .syncbar .line1{font-size:13px;font-weight:600;color:var(--ink);}
+  .syncbar .line2{font-size:12px;color:var(--ink-soft);line-height:1.45;}
+  .syncbar-actions{display:flex;gap:7px;flex-wrap:wrap;}
+  .syncbar-actions .btn{margin-top:0;}
 
   nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:24px;flex-wrap:wrap;}
   nav button{font-family:'Inter',sans-serif;background:none;border:none;padding:10px 16px;font-size:14px;font-weight:500;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;}
@@ -62,6 +82,8 @@
   .btn.secondary{background:none;border:1px solid var(--line);color:var(--ink-soft);}
   .btn.secondary:hover{color:var(--ink);border-color:var(--ink-soft);}
   .btn.small{padding:5px 10px;font-size:12px;margin-top:0;}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .btn:disabled:hover{background:var(--moss);}
   .btn.danger{background:none;color:var(--bad);}
   .btn.danger:hover{background:#FBEEEA;}
 
@@ -177,6 +199,19 @@
 
   <div class="warn" id="storage-warn" style="display:none">
     Dein Browser blockiert lokale Speicherung in dieser Ansicht (z. B. Vorschau-Fenster). Öffne die heruntergeladene HTML-Datei direkt in einem Browser-Tab, damit deine Einträge dauerhaft erhalten bleiben.
+  </div>
+
+  <div class="syncbar" id="syncbar">
+    <span class="dot" id="sync-dot"></span>
+    <div class="syncbar-text">
+      <span class="line1" id="sync-state">Nur auf diesem Gerät gespeichert</span>
+      <span class="line2" id="sync-detail">Melde dich an, um deine Einträge zwischen Geräten zu synchronisieren.</span>
+    </div>
+    <div class="syncbar-actions">
+      <button class="btn small secondary" id="sync-now" type="button" style="display:none">Jetzt synchronisieren</button>
+      <button class="btn small" id="sign-in" type="button">Mit Google anmelden</button>
+      <button class="btn small secondary" id="sign-out" type="button" style="display:none">Abmelden</button>
+    </div>
   </div>
 
   <nav>
@@ -340,9 +375,12 @@
     </div>
   </div>
 
-  <footer>Deine Einträge werden lokal in diesem Browser gespeichert, solange du dieselbe Datei am selben Ort öffnest.</footer>
+  <footer>Deine Einträge werden immer lokal auf diesem Gerät gespeichert. Angemeldet werden sie zusätzlich mit deinem Konto synchronisiert.</footer>
 </div>
 
+<!-- async: ein langsames CDN darf den Start der App nie blockieren. Fehlt die
+     Bibliothek, läuft die App im reinen Lokalmodus weiter. -->
+<script id="supabase-lib" src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" async></script>
 <script>
 const DAYS = ["Mo","Di","Mi","Do","Fr","Sa","So"];
 
@@ -621,23 +659,127 @@ const moodSlider = document.getElementById('log-mood');
 const moodReadout = document.getElementById('mood-readout');
 moodSlider.addEventListener('input', ()=>{ moodReadout.textContent = moodSlider.value; });
 
+// ---- Records ----
+// Every record carries updated_at (last write wins), deleted_at (tombstone, so a
+// deletion on one device survives the next pull) and dirty (not yet pushed).
+// loadEntries()/loadDays() hide tombstones, so the UI never sees them.
+function newUuid(){
+  if(window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  if(window.crypto && crypto.getRandomValues) crypto.getRandomValues(bytes);
+  else for(let i=0;i<16;i++) bytes[i] = Math.floor(Math.random()*256);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+function nowISO(){ return new Date().toISOString(); }
+function isNewer(a, b){ return new Date(a || 0).getTime() > new Date(b || 0).getTime(); }
+
+function loadEntriesRaw(){
+  const list = storageGet('tracker_entries', []);
+  return Array.isArray(list) ? list : [];
+}
+function saveEntriesRaw(list){ return storageSet('tracker_entries', list); }
+function loadEntries(){ return loadEntriesRaw().filter(e=>!e.deleted_at); }
+
+function upsertEntry(entry){
+  const list = loadEntriesRaw();
+  const record = { ...entry, updated_at: nowISO(), deleted_at: null, dirty: true };
+  const idx = list.findIndex(e=>e.id === record.id);
+  if(idx >= 0) list[idx] = record; else list.push(record);
+  const ok = saveEntriesRaw(list);
+  scheduleSync();
+  return ok;
+}
+
+function deleteEntry(id){
+  const list = loadEntriesRaw();
+  const idx = list.findIndex(e=>e.id === id);
+  if(idx < 0) return false;
+  list[idx] = { ...list[idx], deleted_at: nowISO(), updated_at: nowISO(), dirty: true };
+  const ok = saveEntriesRaw(list);
+  scheduleSync();
+  return ok;
+}
+
 // ---- Tagesgefühl (one self-rating per date, independent of activities) ----
-function loadDays(){
+function loadDaysRaw(){
   const data = storageGet('tracker_days', {});
   return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
 }
-function saveDays(days){ return storageSet('tracker_days', days); }
+function saveDaysRaw(days){ return storageSet('tracker_days', days); }
+function loadDays(){
+  const raw = loadDaysRaw();
+  const live = {};
+  Object.keys(raw).forEach(date=>{ if(raw[date] && !raw[date].deleted_at) live[date] = raw[date]; });
+  return live;
+}
 function readDayReview(days, date){
   const raw = days ? days[date] : null;
-  if(!raw || typeof raw !== 'object') return null;
+  if(!raw || typeof raw !== 'object' || raw.deleted_at) return null;
   const mood = parseInt(raw.mood, 10);
   if(isNaN(mood) || mood < 0 || mood > 10) return null;
   return { mood, note: typeof raw.note === 'string' ? raw.note : '' };
 }
 function getDayReview(date){ return readDayReview(loadDays(), date); }
 
-function loadEntries(){ return storageGet('tracker_entries', []); }
-function saveEntries(entries){ return storageSet('tracker_entries', entries); }
+function upsertDayReview(date, mood, note){
+  const days = loadDaysRaw();
+  days[date] = {
+    id: (days[date] && days[date].id) || newUuid(),
+    mood, note,
+    updated_at: nowISO(), deleted_at: null, dirty: true
+  };
+  const ok = saveDaysRaw(days);
+  scheduleSync();
+  return ok;
+}
+
+function deleteDayReview(date){
+  const days = loadDaysRaw();
+  if(!days[date]) return false;
+  days[date] = { ...days[date], deleted_at: nowISO(), updated_at: nowISO(), dirty: true };
+  const ok = saveDaysRaw(days);
+  scheduleSync();
+  return ok;
+}
+
+// Older data predates sync: give it UUIDs and timestamps and mark it dirty so
+// the first successful sync seeds the cloud from whatever is already on device.
+function migrateLocalRecords(){
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const list = loadEntriesRaw();
+  let touched = false;
+  const migrated = list.map(e=>{
+    if(UUID_RE.test(e.id || '') && e.updated_at) return e;
+    touched = true;
+    return {
+      ...e,
+      id: UUID_RE.test(e.id || '') ? e.id : newUuid(),
+      updated_at: e.updated_at || nowISO(),
+      deleted_at: e.deleted_at || null,
+      dirty: true
+    };
+  });
+  if(touched) saveEntriesRaw(migrated);
+
+  const days = loadDaysRaw();
+  let daysTouched = false;
+  Object.keys(days).forEach(date=>{
+    const d = days[date];
+    if(d && d.id && d.updated_at) return;
+    daysTouched = true;
+    days[date] = {
+      ...d,
+      id: (d && d.id) || newUuid(),
+      updated_at: (d && d.updated_at) || nowISO(),
+      deleted_at: (d && d.deleted_at) || null,
+      dirty: true
+    };
+  });
+  if(daysTouched) saveDaysRaw(days);
+}
 
 let openDayDate = null;
 let editingEntryId = null;
@@ -760,8 +902,7 @@ function bindActivityEditors(list){
       }
 
       openDayDate = date;
-      entries[idx] = { ...entries[idx], date, time, text, description, mood, reason };
-      saveEntries(entries);
+      upsertEntry({ ...entries[idx], date, time, text, description, mood, reason });
       editingEntryId = null;
       renderEntries();
     });
@@ -781,9 +922,8 @@ function bindActivityEditors(list){
     btn.addEventListener('click', (ev)=>{
       ev.stopPropagation();
       if(!confirm('Diese Aktivität wirklich löschen?')) return;
-      const remaining = loadEntries().filter(e=>e.id !== btn.dataset.id);
       if(editingEntryId === btn.dataset.id) editingEntryId = null;
-      saveEntries(remaining);
+      deleteEntry(btn.dataset.id);
       renderEntries();
     });
   });
@@ -1147,9 +1287,7 @@ document.getElementById('save-entry').addEventListener('click', ()=>{
     return;
   }
 
-  const entries = loadEntries();
-  entries.push({id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), date, time, mood, text, description, reason});
-  const ok = saveEntries(entries);
+  const ok = upsertEntry({ id: newUuid(), date, time, mood, text, description, reason });
   status.textContent = ok ? 'Hinzugefügt.' : 'Konnte nicht dauerhaft gespeichert werden (nur für diese Sitzung).';
   status.className = ok ? 'status' : 'status error';
   document.getElementById('log-activity').value = '';
@@ -1224,9 +1362,7 @@ document.getElementById('save-day').addEventListener('click', ()=>{
     status.className = 'status error';
     return;
   }
-  const days = loadDays();
-  days[date] = { mood: parseInt(dayMoodSlider.value, 10), note: dayNoteInput.value.trim() };
-  const ok = saveDays(days);
+  const ok = upsertDayReview(date, parseInt(dayMoodSlider.value, 10), dayNoteInput.value.trim());
   status.textContent = ok ? 'Tagesgefühl gespeichert.' : 'Konnte nicht dauerhaft gespeichert werden (nur für diese Sitzung).';
   status.className = ok ? 'status' : 'status error';
   loadDayIntoForm(date);
@@ -1238,9 +1374,7 @@ deleteDayBtn.addEventListener('click', ()=>{
   const date = dayDateInput.value;
   if(!getDayReview(date)) return;
   if(!confirm('Tagesgefühl für diesen Tag löschen?')) return;
-  const days = loadDays();
-  delete days[date];
-  saveDays(days);
+  deleteDayReview(date);
   loadDayIntoForm(date);
   renderEntries();
 });
@@ -1364,45 +1498,71 @@ function parseCsvImport(text){
 }
 
 function mergeImportedDays(dayReviews){
-  const days = loadDays();
+  const days = loadDaysRaw();
   let changed = 0;
   Object.keys(dayReviews).forEach(date=>{
     const incoming = dayReviews[date];
     const existing = readDayReview(days, date);
     if(existing && existing.mood === incoming.mood && existing.note === incoming.note) return;
-    days[date] = incoming;
+    days[date] = {
+      id: (days[date] && days[date].id) || newUuid(),
+      mood: incoming.mood,
+      note: incoming.note,
+      updated_at: nowISO(),
+      deleted_at: null,
+      dirty: true
+    };
     changed++;
   });
-  if(changed) saveDays(days);
+  if(changed){
+    saveDaysRaw(days);
+    scheduleSync();
+  }
   return changed;
 }
 
 function mergeImportedRows(rows){
-  const entries = loadEntries();
+  const all = loadEntriesRaw();
   let added = 0, updated = 0;
   rows.forEach(row=>{
-    const idx = entries.findIndex(e=> e.date === row.date && e.text.toLowerCase() === row.text.toLowerCase());
+    const idx = all.findIndex(e=> !e.deleted_at && e.date === row.date && e.text.toLowerCase() === row.text.toLowerCase());
     if(idx >= 0){
-      let changed = false;
-      if(entries[idx].mood !== row.mood){ entries[idx].mood = row.mood; changed = true; }
-      if((entries[idx].time || '') !== (row.time || '')){ entries[idx].time = row.time || ''; changed = true; }
-      if((entries[idx].description || '') !== (row.description || '')){ entries[idx].description = row.description || ''; changed = true; }
-      if(row.reason && entries[idx].reason !== row.reason){ entries[idx].reason = row.reason; changed = true; }
-      if(changed) updated++;
+      const cur = all[idx];
+      const next = {
+        ...cur,
+        mood: row.mood,
+        time: row.time || '',
+        description: row.description || '',
+        reason: row.reason || cur.reason || ''
+      };
+      const changed = cur.mood !== next.mood
+        || (cur.time || '') !== next.time
+        || (cur.description || '') !== next.description
+        || (cur.reason || '') !== next.reason;
+      if(changed){
+        all[idx] = { ...next, updated_at: nowISO(), dirty: true };
+        updated++;
+      }
     } else {
-      entries.push({
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2,6) + added,
+      all.push({
+        id: newUuid(),
         date: row.date,
         time: row.time || '',
         text: row.text,
         description: row.description || '',
         mood: row.mood,
-        reason: row.reason || ''
+        reason: row.reason || '',
+        updated_at: nowISO(),
+        deleted_at: null,
+        dirty: true
       });
       added++;
     }
   });
-  saveEntries(entries);
+  if(added || updated){
+    saveEntriesRaw(all);
+    scheduleSync();
+  }
   return { added, updated };
 }
 
@@ -1447,8 +1607,314 @@ document.getElementById('import-csv').addEventListener('change', (ev)=>{
   reader.readAsText(file, 'UTF-8');
 });
 
+// ---- Supabase sync ----
+// Offline-first: localStorage stays the source of truth for the UI, the cloud is
+// a mirror that is reconciled with "last write wins" on updated_at. Only the
+// publishable key lives here; row level security keeps users apart.
+const SUPABASE_URL = 'https://hfzuoeglrttdgtdjdrwe.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_MW082YZbu_tiY4ypwO76jQ_ipHp5fom';
+
+let sb = null;
+
+function createSupabaseClient(){
+  try{
+    if(window.supabase && typeof window.supabase.createClient === 'function'){
+      return window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+    }
+  }catch(err){ /* fall through to local-only mode */ }
+  return null;
+}
+
+// The library loads asynchronously, so the app is already usable before it
+// arrives – and stays usable if it never does.
+function whenLibraryReady(callback){
+  if(window.supabase) return callback();
+  const tag = document.getElementById('supabase-lib');
+  if(!tag) return callback();
+  let called = false;
+  const once = ()=>{ if(!called){ called = true; callback(); } };
+  tag.addEventListener('load', once);
+  tag.addEventListener('error', once);
+  setTimeout(once, 8000);
+}
+
+// True until the library has either arrived or definitively failed, so the bar
+// does not briefly claim that sync is unavailable while it is still loading.
+let libraryPending = true;
+let currentUser = null;
+let syncing = false;
+let syncTimer = null;
+let lastSyncAt = null;
+let lastSyncError = '';
+
+function pendingCount(){
+  const days = loadDaysRaw();
+  return loadEntriesRaw().filter(e=>e.dirty).length
+    + Object.keys(days).filter(d=>days[d] && days[d].dirty).length;
+}
+
+function renderSyncBar(){
+  const bar = document.getElementById('syncbar');
+  const state = document.getElementById('sync-state');
+  const detail = document.getElementById('sync-detail');
+  const inBtn = document.getElementById('sign-in');
+  const outBtn = document.getElementById('sign-out');
+  const nowBtn = document.getElementById('sync-now');
+  bar.className = 'syncbar';
+
+  if(!sb || !currentUser){
+    const available = sb || libraryPending;
+    inBtn.style.display = available ? '' : 'none';
+    inBtn.disabled = !sb;
+    outBtn.style.display = 'none';
+    nowBtn.style.display = 'none';
+    state.textContent = 'Nur auf diesem Gerät gespeichert';
+    detail.textContent = available
+      ? 'Melde dich an, um deine Einträge zwischen Geräten zu synchronisieren.'
+      : 'Sync ist gerade nicht verfügbar. Deine Einträge werden lokal gespeichert.';
+    return;
+  }
+
+  inBtn.style.display = 'none';
+  outBtn.style.display = '';
+  nowBtn.style.display = '';
+  state.textContent = currentUser.email || 'Angemeldet';
+
+  const pending = pendingCount();
+  const plural = pending === 1 ? 'Änderung' : 'Änderungen';
+
+  if(syncing){
+    bar.classList.add('is-syncing');
+    detail.textContent = 'Synchronisiere …';
+  } else if(!navigator.onLine){
+    bar.classList.add('is-pending');
+    detail.textContent = pending
+      ? `Offline – ${pending} ${plural} werden übertragen, sobald du wieder online bist.`
+      : 'Offline – alles Bisherige ist übertragen.';
+  } else if(lastSyncError){
+    bar.classList.add('is-error');
+    detail.textContent = 'Sync-Fehler: ' + lastSyncError;
+  } else if(pending){
+    bar.classList.add('is-pending');
+    detail.textContent = `${pending} ${plural} noch nicht übertragen.`;
+  } else {
+    bar.classList.add('is-synced');
+    detail.textContent = lastSyncAt
+      ? 'Alles synchronisiert · ' + new Date(lastSyncAt).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'})
+      : 'Mit der Cloud verbunden.';
+  }
+}
+
+function entryToRow(e){
+  return {
+    id: e.id,
+    user_id: currentUser.id,
+    date: e.date,
+    time: e.time ? e.time + ':00' : null,
+    text: e.text,
+    description: e.description || null,
+    mood: e.mood,
+    reason: e.reason || null,
+    updated_at: e.updated_at,
+    deleted_at: e.deleted_at || null
+  };
+}
+
+function rowToEntry(r){
+  return {
+    id: r.id,
+    date: r.date,
+    time: r.time ? String(r.time).slice(0,5) : '',
+    text: r.text || '',
+    description: r.description || '',
+    mood: r.mood,
+    reason: r.reason || '',
+    updated_at: r.updated_at,
+    deleted_at: r.deleted_at || null,
+    dirty: false
+  };
+}
+
+// The dirty flag is only cleared when the record was not edited again while the
+// request was in flight, otherwise that edit would never be pushed.
+async function pushEntries(){
+  const dirty = loadEntriesRaw().filter(e=>e.dirty);
+  if(!dirty.length) return;
+  const { error } = await sb.from('activities').upsert(dirty.map(entryToRow), { onConflict: 'id' });
+  if(error) throw error;
+  const pushed = new Map(dirty.map(e=>[e.id, e.updated_at]));
+  saveEntriesRaw(loadEntriesRaw().map(e=>
+    pushed.get(e.id) === e.updated_at ? { ...e, dirty:false } : e
+  ));
+}
+
+// Split from the request so the merge rule can be tested without a network.
+function mergeRemoteEntries(rows){
+  const byId = new Map(loadEntriesRaw().map(e=>[e.id, e]));
+  let changed = false;
+  (rows || []).forEach(row=>{
+    const local = byId.get(row.id);
+    if(!local || isNewer(row.updated_at, local.updated_at)){
+      byId.set(row.id, rowToEntry(row));
+      changed = true;
+    }
+  });
+  if(changed) saveEntriesRaw([...byId.values()]);
+  return changed;
+}
+
+async function pullEntries(){
+  const { data, error } = await sb.from('activities').select('*');
+  if(error) throw error;
+  return mergeRemoteEntries(data);
+}
+
+async function pushDays(){
+  const days = loadDaysRaw();
+  const dates = Object.keys(days).filter(d=>days[d] && days[d].dirty);
+  if(!dates.length) return;
+  const rows = dates.map(date=>({
+    id: days[date].id,
+    user_id: currentUser.id,
+    date,
+    mood: days[date].mood,
+    note: days[date].note || null,
+    updated_at: days[date].updated_at,
+    deleted_at: days[date].deleted_at || null
+  }));
+  const { error } = await sb.from('day_reviews').upsert(rows, { onConflict: 'user_id,date' });
+  if(error) throw error;
+  const after = loadDaysRaw();
+  let changed = false;
+  dates.forEach(date=>{
+    if(after[date] && after[date].updated_at === days[date].updated_at){
+      after[date] = { ...after[date], dirty:false };
+      changed = true;
+    }
+  });
+  if(changed) saveDaysRaw(after);
+}
+
+function mergeRemoteDays(rows){
+  const local = loadDaysRaw();
+  let changed = false;
+  (rows || []).forEach(row=>{
+    const cur = local[row.date];
+    if(!cur || isNewer(row.updated_at, cur.updated_at)){
+      local[row.date] = {
+        id: row.id,
+        mood: row.mood,
+        note: row.note || '',
+        updated_at: row.updated_at,
+        deleted_at: row.deleted_at || null,
+        dirty: false
+      };
+      changed = true;
+    }
+  });
+  if(changed) saveDaysRaw(local);
+  return changed;
+}
+
+async function pullDays(){
+  const { data, error } = await sb.from('day_reviews').select('*');
+  if(error) throw error;
+  return mergeRemoteDays(data);
+}
+
+async function syncNow(){
+  if(!sb || !currentUser || syncing) return;
+  if(!navigator.onLine){ renderSyncBar(); return; }
+  syncing = true;
+  lastSyncError = '';
+  renderSyncBar();
+  try{
+    await pushEntries();
+    await pushDays();
+    const entriesChanged = await pullEntries();
+    const daysChanged = await pullDays();
+    lastSyncAt = Date.now();
+    if(entriesChanged || daysChanged){
+      renderEntries();
+      loadDayIntoForm(dayDateInput.value || todayISO());
+    }
+  }catch(err){
+    lastSyncError = (err && err.message) || 'Unbekannter Fehler';
+  }finally{
+    syncing = false;
+    renderSyncBar();
+  }
+}
+
+// Called from every write so the bar reflects the change at once, while the
+// upload itself is debounced.
+function scheduleSync(){
+  renderSyncBar();
+  if(!sb || !currentUser) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, 600);
+}
+
+document.getElementById('sign-in').addEventListener('click', async ()=>{
+  if(!sb) return;
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+  if(error){
+    lastSyncError = error.message;
+    renderSyncBar();
+  }
+});
+
+document.getElementById('sign-out').addEventListener('click', async ()=>{
+  if(!sb) return;
+  await sb.auth.signOut();
+  currentUser = null;
+  lastSyncError = '';
+  lastSyncAt = null;
+  renderSyncBar();
+});
+
+document.getElementById('sync-now').addEventListener('click', syncNow);
+
+window.addEventListener('online', ()=>{ renderSyncBar(); syncNow(); });
+window.addEventListener('offline', renderSyncBar);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncNow(); });
+
+async function initAuth(){
+  libraryPending = false;
+  sb = createSupabaseClient();
+  if(!sb){ renderSyncBar(); return; }
+  sb.auth.onAuthStateChange((_event, session)=>{
+    currentUser = session ? session.user : null;
+    lastSyncError = '';
+    renderSyncBar();
+    if(currentUser) syncNow();
+  });
+  try{
+    const { data } = await sb.auth.getSession();
+    currentUser = (data && data.session && data.session.user) || null;
+  }catch(err){
+    currentUser = null;
+  }
+  renderSyncBar();
+  if(currentUser) syncNow();
+}
+
+// Registered right away rather than on window.load, which would wait for the
+// async Supabase script. Fails silently on file://, where workers are not allowed.
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+}
+
+migrateLocalRecords();
 loadDayIntoForm(todayISO());
 renderEntries();
+renderSyncBar();
+whenLibraryReady(initAuth);
 </script>
 </body>
 </html>

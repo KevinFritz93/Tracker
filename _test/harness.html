@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>running</title></head>
+<body>
+<pre id="out"></pre>
+<script>
+const results = [];
+function check(name, cond, extra){
+  results.push((cond ? 'PASS  ' : 'FAIL  ') + name + (cond || extra === undefined ? '' : ' :: ' + JSON.stringify(extra)));
+}
+
+// Seed legacy-shaped data before the app boots, to exercise the migration.
+localStorage.clear();
+localStorage.setItem('tracker_entries', JSON.stringify([
+  { id: 'legacy1', date: '2026-08-01', time: '09:00', text: 'Alt', description: 'd', mood: 6, reason: 'r' }
+]));
+localStorage.setItem('tracker_days', JSON.stringify({
+  '2026-08-01': { mood: 7, note: 'alter Tag' }
+}));
+
+const frame = document.createElement('iframe');
+frame.src = '../index.html';
+frame.style.cssText = 'width:800px;height:600px;border:0';
+document.body.appendChild(frame);
+
+// Poll for the app's functions rather than waiting for the iframe's load
+// event: that event also waits on the Supabase CDN, which may be slow or
+// unreachable, while the app itself is ready long before.
+let waited = 0;
+const poll = setInterval(()=>{
+  const w = frame.contentWindow;
+  const ready = w && typeof w.upsertEntry === 'function' && typeof w.mergeRemoteEntries === 'function';
+  waited += 100;
+  if(!ready){
+    if(waited < 8000) return;
+    clearInterval(poll);
+    results.push('FAIL  app never initialised inside iframe');
+    return finish();
+  }
+  clearInterval(poll);
+  try{ run(w); }
+  catch(err){
+    results.push('FAIL  harness threw :: ' + err.message + '\n' + err.stack);
+    finish();
+  }
+}, 100);
+
+function finish(){
+  document.getElementById('out').textContent = results.join('\n');
+  const failed = results.filter(r=>r.startsWith('FAIL')).length;
+  document.title = failed ? `FAILED ${failed}` : `OK ${results.length}`;
+}
+
+function run(w){
+  const raw = ()=> JSON.parse(localStorage.getItem('tracker_entries') || '[]');
+  const rawDays = ()=> JSON.parse(localStorage.getItem('tracker_days') || '{}');
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // --- migration of pre-sync data ---
+  const migrated = raw();
+  check('migration: legacy entry got a uuid', UUID.test(migrated[0].id), migrated[0].id);
+  check('migration: legacy entry got updated_at', !!migrated[0].updated_at);
+  check('migration: legacy entry marked dirty', migrated[0].dirty === true);
+  check('migration: legacy entry keeps its content',
+        migrated[0].text === 'Alt' && migrated[0].mood === 6);
+  const migratedDay = rawDays()['2026-08-01'];
+  check('migration: legacy day got uuid + dirty',
+        UUID.test(migratedDay.id) && migratedDay.dirty === true);
+  check('migration: legacy day keeps mood/note',
+        migratedDay.mood === 7 && migratedDay.note === 'alter Tag');
+
+  // --- create ---
+  const id = w.newUuid();
+  w.upsertEntry({ id, date:'2026-08-10', time:'', text:'Neu', description:'x', mood:8, reason:'y' });
+  const created = raw().find(e=>e.id === id);
+  check('create: stored with dirty + updated_at', created.dirty === true && !!created.updated_at);
+  check('create: visible through loadEntries', w.loadEntries().some(e=>e.id === id));
+
+  // --- remote wins when strictly newer ---
+  const future = new Date(Date.now() + 60000).toISOString();
+  const changedNewer = w.mergeRemoteEntries([{
+    id, date:'2026-08-10', time:'14:30:00', text:'Vom Server', description:'s',
+    mood:3, reason:'z', updated_at: future, deleted_at: null
+  }]);
+  const afterNewer = raw().find(e=>e.id === id);
+  check('pull: newer remote replaces local', changedNewer === true && afterNewer.text === 'Vom Server');
+  check('pull: postgres time trimmed to HH:MM', afterNewer.time === '14:30', afterNewer.time);
+  check('pull: merged record is no longer dirty', afterNewer.dirty === false);
+
+  // --- local wins when remote is older ---
+  w.upsertEntry({ ...afterNewer, text:'Lokal neuer' });
+  const past = new Date(Date.now() - 60000).toISOString();
+  const changedOlder = w.mergeRemoteEntries([{
+    id, date:'2026-08-10', time:'14:30:00', text:'Alter Server', description:'s',
+    mood:3, reason:'z', updated_at: past, deleted_at: null
+  }]);
+  const afterOlder = raw().find(e=>e.id === id);
+  check('pull: older remote is ignored', changedOlder === false && afterOlder.text === 'Lokal neuer');
+  check('pull: unpushed local edit stays dirty', afterOlder.dirty === true);
+
+  // --- remote tombstone hides the entry locally ---
+  w.mergeRemoteEntries([{
+    id, date:'2026-08-10', time:null, text:'Lokal neuer', description:'s',
+    mood:3, reason:'z', updated_at: new Date(Date.now() + 120000).toISOString(),
+    deleted_at: new Date(Date.now() + 120000).toISOString()
+  }]);
+  check('pull: remote delete hides entry', !w.loadEntries().some(e=>e.id === id));
+  check('pull: tombstone is kept in storage', raw().some(e=>e.id === id));
+
+  // --- local delete keeps a pushable tombstone ---
+  const id2 = w.newUuid();
+  w.upsertEntry({ id:id2, date:'2026-08-11', time:'', text:'Weg', description:'x', mood:5, reason:'y' });
+  w.deleteEntry(id2);
+  const tomb = raw().find(e=>e.id === id2);
+  check('delete: hidden from UI', !w.loadEntries().some(e=>e.id === id2));
+  check('delete: tombstone dirty for upload', !!tomb.deleted_at && tomb.dirty === true);
+
+  // --- day reviews ---
+  w.upsertDayReview('2026-08-12', 9, 'guter Tag');
+  check('day: saved and readable', w.getDayReview('2026-08-12').mood === 9);
+  check('day: dirty for upload', rawDays()['2026-08-12'].dirty === true);
+
+  const dayFuture = new Date(Date.now() + 60000).toISOString();
+  w.mergeRemoteDays([{ id: rawDays()['2026-08-12'].id, date:'2026-08-12', mood:2,
+                       note:'vom Server', updated_at: dayFuture, deleted_at: null }]);
+  check('day: newer remote wins', w.getDayReview('2026-08-12').mood === 2);
+
+  w.mergeRemoteDays([{ id: rawDays()['2026-08-12'].id, date:'2026-08-12', mood:4,
+                       note:'alt', updated_at: new Date(Date.now() - 60000).toISOString(),
+                       deleted_at: null }]);
+  check('day: older remote ignored', w.getDayReview('2026-08-12').mood === 2);
+
+  w.deleteDayReview('2026-08-12');
+  check('day: delete hides it', w.getDayReview('2026-08-12') === null);
+  check('day: delete leaves dirty tombstone',
+        rawDays()['2026-08-12'].deleted_at && rawDays()['2026-08-12'].dirty === true);
+  check('day: tombstone excluded from loadDays', !('2026-08-12' in w.loadDays()));
+
+  // --- pending counter drives the status bar ---
+  check('pending count > 0 with unpushed changes', w.pendingCount() > 0, w.pendingCount());
+
+  // --- local-only mode when the Supabase library is unavailable ---
+  const bar = frame.contentDocument.getElementById('sync-state');
+  check('offline/local mode message shown',
+        bar.textContent.indexOf('Nur auf diesem Gerät') === 0, bar.textContent);
+
+  // --- the app still rendered its lists ---
+  const list = frame.contentDocument.getElementById('entries-list');
+  check('entries list rendered', list && list.children.length > 0);
+
+  finish();
+}
+</script>
+<!-- Holds the load event open so --dump-dom snapshots the finished
+     results. A pending script delays load; a pending image does not. -->
+<script src="/slow?ms=6000"></script>
+</body>
+</html>

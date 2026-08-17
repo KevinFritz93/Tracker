@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>running</title></head>
+<body>
+<pre id="out"></pre>
+<script>
+const out = [];
+function check(name, cond, extra){
+  out.push((cond ? 'PASS  ' : 'FAIL  ') + name + (cond || extra === undefined ? '' : ' :: ' + extra));
+}
+
+const frame = document.createElement('iframe');
+frame.src = '../index.html';
+document.body.appendChild(frame);
+
+(async ()=>{
+  // Poll instead of waiting for the iframe's load event, which also waits for
+  // the Supabase CDN. Registration happens well before that.
+  let regs = [];
+  for(let waited = 0; waited < 8000; waited += 200){
+    regs = await navigator.serviceWorker.getRegistrations();
+    if(regs.length) break;
+    await new Promise(r=>setTimeout(r, 200));
+  }
+  try{
+    check('service worker registered', regs.length > 0, 'count=' + regs.length);
+    if(regs.length){
+      const reg = regs[0];
+      const worker = reg.active || reg.installing || reg.waiting;
+      check('worker script is ours', !!worker && /service-worker\.js$/.test(worker.scriptURL),
+            worker && worker.scriptURL);
+      await navigator.serviceWorker.ready;
+      check('worker reached active state', !!reg.active, reg.active && reg.active.state);
+
+      const cacheNames = await caches.keys();
+      check('cache created', cacheNames.length > 0, cacheNames.join(','));
+      const cache = await caches.open(cacheNames[0]);
+      const keys = await cache.keys();
+      const urls = keys.map(k=>new URL(k.url).pathname);
+      check('index.html precached', urls.some(u=>u.endsWith('/index.html')), urls.join(' '));
+      check('manifest precached', urls.some(u=>u.endsWith('/manifest.json')));
+      check('icons precached', urls.some(u=>u.endsWith('/icons/icon-192.png')));
+    }
+  }catch(err){
+    check('service worker check threw', false, err.message);
+  }
+  document.getElementById('out').textContent = out.join('\n');
+  document.title = out.some(l=>l.startsWith('FAIL')) ? 'FAILED' : 'OK';
+})();
+</script>
+<!-- Holds the load event open so --dump-dom snapshots the finished
+     results. A pending script delays load; a pending image does not. -->
+<script src="/slow?ms=9000"></script>
+</body>
+</html>
